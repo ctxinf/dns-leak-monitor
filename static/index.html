@@ -108,10 +108,13 @@
   .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:38px; height:38px;
     border:1px solid var(--sep); border-radius:10px; background:var(--card); color:var(--text2); cursor:pointer; }
   .icon-btn svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.7; }
-  .appearance { position:relative; }
-  .appearance summary { list-style:none; width:auto; padding:0 8px; gap:4px; }
-  .appearance summary::-webkit-details-marker { display:none; }
-  .appearance select { position:absolute; right:0; top:44px; z-index:5; min-width:140px; border-color:var(--sep); background:var(--card); box-shadow:var(--shadow); }
+  .interface-tag { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:5px 10px;
+    background:rgba(52,199,89,.13); color:var(--text2); font-size:12px; font-weight:600; max-width:190px; }
+  .interface-tag::before { content:""; width:7px; height:7px; flex:none; border-radius:50%; background:var(--green); }
+  .interface-tag[data-state="paused"]::before { background:var(--orange); }
+  .interface-tag span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #theme { width:auto; gap:6px; padding:0 9px; font:inherit; font-size:12px; }
+  #captureStatus { margin-bottom:12px; color:var(--orange); }
   dialog { width:min(560px, calc(100% - 32px)); max-height:calc(100dvh - 40px); overflow:auto;
     padding:24px; border:1px solid var(--sep); border-radius:var(--radius); background:var(--card); color:var(--text); box-shadow:var(--shadow); }
   dialog::backdrop { background:rgba(0,0,0,.4); }
@@ -121,11 +124,11 @@
   dialog textarea { resize:vertical; min-height:130px; }
   .dialog-footer { display:flex; justify-content:flex-end; align-items:center; gap:12px; margin-top:20px; }
   .filter-panel { display:block; }
-  .time-fields { display:flex; gap:12px; flex-wrap:wrap; }
-  #presets { margin-top:8px; align-self:flex-start; }
+  .filter-row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+  .time-fields { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .time-separator { color:var(--dim); }
   #presets button { font-size:11px; padding:3px 9px; }
-  .search-row { display:flex; gap:12px; align-items:flex-end; margin-top:16px; flex-wrap:wrap; }
-  .search-row .field { flex:1; min-width:210px; }
+  #q { flex:1; min-width:200px; }
   .filter-actions { display:flex; gap:8px; margin-left:auto; }
   .page-size { display:inline-flex; align-items:center; gap:8px; }
   .table-scroll { overflow-x:auto; }
@@ -133,7 +136,12 @@
     header { gap:8px; }
     header img { width:24px; height:24px; }
     h1 { font-size:18px; }
-    header .sub { display:none; }
+    header { flex-wrap:wrap; }
+    .header-actions { flex-wrap:wrap; width:100%; justify-content:flex-end; }
+    .interface-tag { max-width:140px; }
+    .time-fields { width:100%; }
+    .time-fields input { flex:1; min-width:0; width:calc((100% - 28px) / 2); font-size:12px; padding:7px 5px; }
+    #q { min-width:150px; flex-basis:100%; }
     .header-actions { gap:6px; }
     .icon-btn { width:34px; height:34px; }
   }
@@ -156,18 +164,13 @@
     <img src="/favicon.svg" alt="">
     <div>
       <h1>DNS Leak Monitor</h1>
-      <div class="sub">Every stored row is unaccepted egress — investigate or exclude.</div>
     </div>
     <div class="header-actions">
-      <details class="appearance" id="appearanceMenu">
-        <summary class="icon-btn" aria-label="Appearance" title="Appearance">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg>
-          <span aria-hidden="true">⌄</span>
-        </summary>
-        <select id="theme" size="3" aria-label="Appearance">
-          <option value="light">Light</option><option value="dark">Dark</option><option value="auto">Auto</option>
-        </select>
-      </details>
+      <span class="interface-tag" id="interfaceTag" data-state="paused" role="status"><span id="interfaceName">Loading…</span></span>
+      <button class="icon-btn" id="theme" title="Appearance: Auto" aria-label="Appearance: Auto. Switch to Light.">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg>
+        <span id="themeLabel">Auto</span>
+      </button>
       <button class="icon-btn" id="openSettings" title="Capture settings" aria-label="Capture settings">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 3-.6 2.3-2 .9-2.1-.6-2 3.4 1.6 1.7v2.6L2.3 15l2 3.4 2.1-.6 2 .9L9 21h4l.6-2.3 2-.9 2.1.6 2-3.4-1.6-1.7v-2.6L19.7 9l-2-3.4-2.1.6-2-.9L13 3Z"/><circle cx="11" cy="12" r="3"/></svg>
       </button>
@@ -183,21 +186,10 @@
     <div class="note">Excluded queries are discarded before storage. Saved changes apply immediately.</div>
     <div class="dialog-footer"><span id="saveStatus" role="status"></span><button class="btn" id="saveSettings">Save settings</button></div>
   </dialog>
-  <div class="note" id="captureStatus" role="status">Loading capture status…</div>
+  <div class="note" id="captureStatus" role="status" hidden></div>
 
   <div class="card">
     <div class="panel filter-panel">
-      <div class="time-fields">
-      <div class="field">
-        <label for="from">From</label>
-        <input type="datetime-local" id="from">
-      </div>
-      <div class="field">
-        <label for="to">To</label>
-        <input type="datetime-local" id="to">
-      </div>
-      </div>
-      <div class="field">
         <div class="seg" id="presets">
           <button data-h="1">1h</button>
           <button data-h="12">12h</button>
@@ -206,9 +198,13 @@
           <button data-h="720">30d</button>
           <button data-h="0">All</button>
         </div>
-      </div>
-      <div class="search-row">
-        <div class="field"><label for="q">Search name</label><input type="search" id="q" placeholder="substring of qname…"></div>
+      <div class="filter-row">
+        <div class="time-fields">
+          <input type="datetime-local" id="from" aria-label="From time">
+          <span class="time-separator" aria-hidden="true">~</span>
+          <input type="datetime-local" id="to" aria-label="To time">
+        </div>
+        <input type="search" id="q" aria-label="Search name substring" placeholder="Search name (substring match)…">
         <div class="filter-actions"><button class="btn" id="apply">Apply</button><button class="btn sec" id="reset">Reset</button></div>
       </div>
     </div>
@@ -273,7 +269,7 @@ function setPreset(hours) {
   if (hours === 0) { $('from').value = ''; $('to').value = ''; return; }
   const now = Math.floor(Date.now() / 1000);
   $('from').value = toLocalInput(now - hours * 3600);
-  $('to').value = toLocalInput(now);
+  $('to').value = ''; // Keep the upper bound open so new records appear on refresh.
 }
 
 // Editing the explicit fields means the preset no longer describes the range.
@@ -418,14 +414,17 @@ $('collapse').addEventListener('change', () => go(1));
 function setTheme(t) {
   document.documentElement.dataset.theme = t;
   try { localStorage.setItem('theme', t); } catch (e) { /* non-fatal */ }
-  $('theme').value = t;
+  const names = {light:'Light', dark:'Dark', auto:'Auto'};
+  const next = {auto:'light', light:'dark', dark:'auto'};
+  $('themeLabel').textContent = names[t];
+  $('theme').title = 'Appearance: ' + names[t];
+  $('theme').setAttribute('aria-label', `Appearance: ${names[t]}. Switch to ${names[next[t]]}.`);
 }
-$('theme').addEventListener('change', () => {
-  setTheme($('theme').value);
-  $('appearanceMenu').open = false;
+$('theme').addEventListener('click', () => {
+  const next = {auto:'light', light:'dark', dark:'auto'};
+  setTheme(next[document.documentElement.dataset.theme] || 'auto');
 });
-document.addEventListener('click', e => { if (!$('appearanceMenu').contains(e.target)) $('appearanceMenu').open = false; });
-$('openSettings').addEventListener('click', () => { $('settingsDialog').showModal(); loadSettings(); });
+$('openSettings').addEventListener('click', () => { $('saveStatus').textContent = ''; $('settingsDialog').showModal(); loadSettings(); });
 $('closeSettings').addEventListener('click', () => $('settingsDialog').close());
 $('settingsDialog').addEventListener('click', e => {
   const rect = $('settingsDialog').getBoundingClientRect();
@@ -444,7 +443,12 @@ async function loadSettings() {
     const res = await fetch('/api/settings');
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
+    const capturing = data.status.startsWith('Capturing on ');
+    $('interfaceName').textContent = capturing ? data.status.slice('Capturing on '.length) : data.interface;
+    $('interfaceTag').dataset.state = capturing ? 'active' : 'paused';
+    $('interfaceTag').title = data.status;
     $('captureStatus').textContent = data.status + (data.error ? ' — ' + data.error : '');
+    $('captureStatus').hidden = capturing && !data.error;
     const selected = settingsLoaded ? $('interface').value : data.interface;
     const names = [...new Set([...data.interfaces, selected].filter(Boolean))];
     const options = names.map(name => {
@@ -464,7 +468,7 @@ async function loadSettings() {
       $('exclude').value = data.exclude.join('\n');
       settingsLoaded = true;
     }
-  } catch (e) { $('captureStatus').textContent = 'Capture status unavailable: ' + e.message; }
+  } catch (e) { $('captureStatus').hidden = false; $('captureStatus').textContent = 'Capture status unavailable: ' + e.message; $('interfaceTag').dataset.state = 'paused'; }
 }
 $('saveSettings').addEventListener('click', async () => {
   $('saveSettings').disabled = true;
@@ -473,8 +477,8 @@ $('saveSettings').addEventListener('click', async () => {
     const body = 'interface = ' + JSON.stringify($('interface').value) + '\nexclude = ' + JSON.stringify($('exclude').value.split(/\r?\n/).map(s => s.trim()).filter(Boolean)) + '\n';
     const res = await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/toml'}, body});
     if (!res.ok) throw new Error(await res.text());
-    $('saveStatus').textContent = 'Saved';
-    loadSettings();
+    $('settingsDialog').close();
+    await loadSettings();
   } catch (e) { $('saveStatus').textContent = 'Save failed: ' + e.message; }
   finally { $('saveSettings').disabled = false; }
 });

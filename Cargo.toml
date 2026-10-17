@@ -1,6 +1,6 @@
 [package]
 name = "dns-leak-monitor"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 description = "Monitor outbound plaintext DNS queries on Linux to help detect DNS leaks."
 

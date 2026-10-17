@@ -133,3 +133,7 @@ and systemd templates; the installer script builds from a source checkout.
 Docker images build in parallel on native x86_64 and ARM64 runners, with
 separate architecture caches. Version tags are published only after both builds
 succeed, by combining their immutable image digests into a multi-platform manifest.
+
+The Docker image includes its default config template. On first startup it copies
+the template into `/etc/dns-leak-monitor/config.toml` if that file is absent,
+including when an empty host directory is mounted. Existing configs are preserved.

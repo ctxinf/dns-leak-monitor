@@ -1,0 +1,28 @@
+# Linux host; run: docker compose up -d
+services:
+  dns-leak-monitor:
+    image: ghcr.io/ctxinf/dns-leak-monitor:0.2.2
+    network_mode: host
+    user: "0:0"
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    restart: unless-stopped
+    stop_grace_period: 10s
+    volumes:
+      - ./config:/etc/dns-leak-monitor:Z
+      - dns-leak-monitor-data:/var/lib/dns-leak-monitor
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  dns-leak-monitor-data:
+    name: dns-leak-monitor-data

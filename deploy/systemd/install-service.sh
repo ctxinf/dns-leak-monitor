@@ -81,7 +81,7 @@ if ! id -u "$SVC_USER" >/dev/null 2>&1; then
 fi
 
 install -d -m 0750 -o "$SVC_USER" -g "$SVC_USER" "$DATA_DIR"
-install -d -m 0755 "$CONF_DIR"
+install -d -m 0755 -o "$SVC_USER" -g "$SVC_USER" "$CONF_DIR"
 
 if [[ -f $CONF ]]; then
   say "keeping existing $CONF"

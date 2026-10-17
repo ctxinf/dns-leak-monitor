@@ -46,11 +46,11 @@
   .panel { padding: 16px; display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: flex-end; }
   .field { display: flex; flex-direction: column; gap: 6px; }
   .field label { font-size: 12px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: .4px; }
-  input, select {
+  input, select, textarea {
     font: inherit; color: var(--text); background: var(--bg); border: 1px solid transparent;
     border-radius: 9px; padding: 7px 10px; min-height: 34px; outline: none;
   }
-  input:focus, select:focus { border-color: var(--blue); background: var(--card); }
+  input:focus, select:focus, textarea:focus { border-color: var(--blue); background: var(--card); }
   input[type=search] { min-width: 210px; }
 
   /* iOS segmented control for the range presets */
@@ -124,12 +124,37 @@
       <h1>DNS Leak Monitor</h1>
       <div class="sub">Every stored row is unaccepted egress — investigate or exclude.</div>
     </div>
+    <span class="spacer"></span>
+      <div class="seg" id="theme" role="group" aria-label="Appearance">
+        <button data-t="light" title="Always light">Light</button>
+        <button data-t="dark" title="Always dark">Dark</button>
+        <button data-t="auto" title="Follow the system appearance">Auto</button>
+      </div>
   </header>
+
+  <details class="card" style="padding:16px;margin-bottom:16px">
+    <summary style="cursor:pointer">Capture settings</summary>
+    <div class="panel">
+      <div class="field"><label for="interface">Interface</label><input id="interface" list="interfaces"><datalist id="interfaces"></datalist></div>
+      <div class="field" style="flex:1"><label for="exclude">Exclude domains (one per line)</label><textarea id="exclude" rows="4" style="min-width:240px"></textarea></div>
+      <button class="btn" id="saveSettings">Save settings</button>
+      <span id="saveStatus" role="status"></span>
+    </div>
+    <div class="note">Excluded queries are discarded before storage. Changes apply immediately and persist in config-runtime.toml.</div>
+  </details>
+  <div class="note" id="captureStatus" role="status">Loading capture status…</div>
 
   <div class="card">
     <div class="panel">
       <div class="field">
-        <label>Range</label>
+        <label for="from">From</label>
+        <input type="datetime-local" id="from">
+      </div>
+      <div class="field">
+        <label for="to">To</label>
+        <input type="datetime-local" id="to">
+      </div>
+      <div class="field">
         <div class="seg" id="presets">
           <button data-h="1">1h</button>
           <button data-h="12">12h</button>
@@ -138,14 +163,6 @@
           <button data-h="720">30d</button>
           <button data-h="0">All</button>
         </div>
-      </div>
-      <div class="field">
-        <label for="from">From</label>
-        <input type="datetime-local" id="from">
-      </div>
-      <div class="field">
-        <label for="to">To</label>
-        <input type="datetime-local" id="to">
       </div>
       <div class="field">
         <label for="q">Search name</label>
@@ -173,11 +190,6 @@
       </label>
       <span class="spacer"></span>
       <span class="status" id="status">—</span>
-      <div class="seg" id="theme" role="group" aria-label="Appearance">
-        <button data-t="light" title="Always light">Light</button>
-        <button data-t="dark" title="Always dark">Dark</button>
-        <button data-t="auto" title="Follow the system appearance">Auto</button>
-      </div>
       <button class="btn ghost" id="refresh">Refresh</button>
       <button class="btn danger" id="delAll">Delete all matching</button>
     </div>
@@ -196,7 +208,7 @@
       <span class="spacer"></span>
       <button class="btn sec" id="first">« First</button>
       <button class="btn sec" id="prev">‹ Prev</button>
-      <span class="status" id="pageInfo">–</span>
+      <label class="status">Page <input id="pageJump" type="number" min="1" value="1" aria-label="Jump to page" style="width:80px"> / <span id="pageInfo">1</span></label>
       <button class="btn sec" id="next">Next ›</button>
       <button class="btn sec" id="last">Last »</button>
     </div>
@@ -213,7 +225,7 @@ let pageNo = 1, total = 0, timer = null;
 // through the Date constructor so the epoch we send matches what the user sees.
 const toEpoch = v => v ? Math.floor(new Date(v).getTime() / 1000) : null;
 const toLocalInput = epoch => {
-  const d = new Date(epoch * 1000 - new Date().getTimezoneOffset() * 60000);
+  const d = new Date(epoch * 1000 - new Date(epoch * 1000).getTimezoneOffset() * 60000);
   return d.toISOString().slice(0, 16);
 };
 
@@ -224,7 +236,7 @@ function setPreset(hours) {
   if (hours === 0) { $('from').value = ''; $('to').value = ''; return; }
   const now = Math.floor(Date.now() / 1000);
   $('from').value = toLocalInput(now - hours * 3600);
-  $('to').value = '';   // open-ended so rows arriving mid-session still show
+  $('to').value = toLocalInput(now);
 }
 
 // Editing the explicit fields means the preset no longer describes the range.
@@ -258,7 +270,9 @@ async function refresh() {
     if (pageNo > pages) { pageNo = pages; return refresh(); }
     const start = total ? (pageNo - 1) * data.pageSize + 1 : 0;
     $('range').textContent = `${start}–${Math.min(pageNo * data.pageSize, total)} of ${total}`;
-    $('pageInfo').textContent = `Page ${pageNo} / ${pages}`;
+    $('pageInfo').textContent = pages;
+    $('pageJump').max = pages;
+    if (document.activeElement !== $('pageJump')) $('pageJump').value = pageNo;
     $('first').disabled = $('prev').disabled = pageNo <= 1;
     $('next').disabled = $('last').disabled = pageNo >= pages;
     $('last').dataset.p = pages;
@@ -335,7 +349,9 @@ $('delAll').addEventListener('click', async () => {
   refresh();
 });
 
-function go(n) { pageNo = n; refresh(); }
+function go(n) { pageNo = Math.max(1, Math.min(Number($('last').dataset.p) || 1, Math.trunc(n) || 1)); refresh(); }
+$('pageJump').addEventListener('change', () => go(Number($('pageJump').value)));
+$('pageJump').addEventListener('keydown', e => { if (e.key === 'Enter') go(Number($('pageJump').value)); });
 $('first').addEventListener('click', () => go(1));
 $('prev').addEventListener('click', () => go(Math.max(1, pageNo - 1)));
 $('next').addEventListener('click', () => go(pageNo + 1));
@@ -379,6 +395,36 @@ function setAuto() {
   if ($('auto').checked) timer = setInterval(refresh, 5000);
 }
 $('auto').addEventListener('change', setAuto);
+
+let settingsLoaded = false;
+async function loadSettings() {
+  try {
+    const res = await fetch('/api/settings');
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    $('captureStatus').textContent = data.status + (data.error ? ' — ' + data.error : '');
+    $('interfaces').replaceChildren(...data.interfaces.map(name => { const o = document.createElement('option'); o.value = name; return o; }));
+    if (!settingsLoaded) {
+      $('interface').value = data.interface;
+      $('exclude').value = data.exclude.join('\n');
+      settingsLoaded = true;
+    }
+  } catch (e) { $('captureStatus').textContent = 'Capture status unavailable: ' + e.message; }
+}
+$('saveSettings').addEventListener('click', async () => {
+  $('saveSettings').disabled = true;
+  try {
+    // JSON basic strings and arrays are also valid TOML values.
+    const body = 'interface = ' + JSON.stringify($('interface').value) + '\nexclude = ' + JSON.stringify($('exclude').value.split(/\r?\n/).map(s => s.trim()).filter(Boolean)) + '\n';
+    const res = await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/toml'}, body});
+    if (!res.ok) throw new Error(await res.text());
+    $('saveStatus').textContent = 'Saved';
+    loadSettings();
+  } catch (e) { $('saveStatus').textContent = 'Save failed: ' + e.message; }
+  finally { $('saveSettings').disabled = false; }
+});
+loadSettings();
+setInterval(loadSettings, 5000);
 
 setTheme(document.documentElement.dataset.theme || 'auto');
 setPreset(24);

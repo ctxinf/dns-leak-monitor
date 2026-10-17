@@ -10,7 +10,7 @@ AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/dns-leak-monitor
+ReadWritePaths=/var/lib/dns-leak-monitor /etc/dns-leak-monitor
 Restart=on-failure
 
 [Install]

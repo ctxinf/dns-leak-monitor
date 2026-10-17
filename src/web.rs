@@ -6,7 +6,7 @@ const FAVICON: &str = include_str!("../static/favicon.svg");
 const PAGE_SIZE_DEFAULT: i64 = 50;
 const PAGE_SIZE_MAX: i64 = 1000;
 
-pub fn run(bind: &str, db_path: &str) -> Result<(), String> {
+pub fn run(bind: &str, db_path: &str, runtime: crate::config::Shared) -> Result<(), String> {
     let server = Server::http(bind).map_err(|e| format!("bind {bind}: {e}"))?;
     // Reads use a read-only connection; deletes get a separate read-write
     // one. WAL serializes it against the writer thread; busy_timeout rides
@@ -26,7 +26,7 @@ pub fn run(bind: &str, db_path: &str) -> Result<(), String> {
         .map_err(|e| format!("busy_timeout: {e}"))?;
     eprintln!("console on http://{bind}");
 
-    for req in server.incoming_requests() {
+    for mut req in server.incoming_requests() {
         let url = req.url().to_string();
         let (path, query) = url.split_once('?').unwrap_or((url.as_str(), ""));
         let resp = match (req.method(), path) {
@@ -35,12 +35,52 @@ pub fn run(bind: &str, db_path: &str) -> Result<(), String> {
             (Method::Get, "/favicon.svg") => Response::from_string(FAVICON)
                 .with_header(header("Content-Type", "image/svg+xml"))
                 .with_header(header("Cache-Control", "max-age=86400")),
+            (Method::Get, "/api/settings") => {
+                let state = runtime.lock().unwrap();
+                let devices = pcap::Device::list();
+                let (interfaces, error) = match devices {
+                    Ok(devices) => (
+                        devices
+                            .iter()
+                            .map(|d| json_str(&d.name))
+                            .collect::<Vec<_>>()
+                            .join(","),
+                        String::new(),
+                    ),
+                    Err(e) => (String::new(), e.to_string()),
+                };
+                Response::from_string(format!("{{\"interface\":{},\"exclude\":[{}],\"status\":{},\"interfaces\":[{}],\"error\":{}}}",
+                    json_str(&state.settings.interface), state.settings.exclude.iter().map(|s| json_str(s)).collect::<Vec<_>>().join(","),
+                    json_str(&state.status), interfaces, json_str(&error)))
+                    .with_header(header("Content-Type", "application/json"))
+                    .with_header(header("Cache-Control", "no-store"))
+            }
+            (Method::Post, "/api/settings") => {
+                let mut body = String::new();
+                use std::io::Read;
+                let result = req
+                    .as_reader()
+                    .take(65537)
+                    .read_to_string(&mut body)
+                    .map_err(|e| e.to_string())
+                    .and_then(|_| {
+                        if body.len() > 65536 {
+                            Err("Settings too large".into())
+                        } else {
+                            toml::from_str::<crate::config::RuntimeConfig>(&body)
+                                .map_err(|e| e.to_string())
+                        }
+                    })
+                    .and_then(|settings| runtime.lock().unwrap().save(settings));
+                match result {
+                    Ok(()) => Response::from_string("Saved"),
+                    Err(e) => Response::from_string(e).with_status_code(400),
+                }
+            }
             (Method::Get, "/api/records") => match records_json(&rconn, query) {
                 Ok(json) => Response::from_string(json)
                     .with_header(header("Content-Type", "application/json")),
-                Err(e) => {
-                    Response::from_string(format!("query failed: {e}")).with_status_code(500)
-                }
+                Err(e) => Response::from_string(format!("query failed: {e}")).with_status_code(500),
             },
             (Method::Delete, "/api/records") => match delete_records(&wconn, query) {
                 Ok(Some(n)) => Response::from_string(format!("{{\"deleted\":{n}}}"))
@@ -91,7 +131,9 @@ fn filter_sql(query: &str) -> (String, Vec<rusqlite::types::Value>) {
         sql.push_str(" AND ts <= ?");
         params.push(Value::Integer(to));
     }
-    let needle = query_param(query, "q").map(percent_decode).unwrap_or_default();
+    let needle = query_param(query, "q")
+        .map(percent_decode)
+        .unwrap_or_default();
     let needle = needle.trim().to_string();
     if !needle.is_empty() {
         // LIKE with the default (non-ASCII-aware) collation is fine here:
@@ -128,7 +170,8 @@ fn records_json(conn: &Connection, query: &str) -> rusqlite::Result<String> {
     let offset = (page_no - 1) * page_size;
     let collapse = query_param(query, "collapse") == Some("1");
     let (where_sql, params) = filter_sql(query);
-    let pref: Vec<&dyn rusqlite::ToSql> = params.iter().map(|v| v as &dyn rusqlite::ToSql).collect();
+    let pref: Vec<&dyn rusqlite::ToSql> =
+        params.iter().map(|v| v as &dyn rusqlite::ToSql).collect();
 
     let total: i64 = if collapse {
         conn.query_row(
@@ -165,7 +208,8 @@ fn records_json(conn: &Connection, query: &str) -> rusqlite::Result<String> {
 
     let mut stmt = conn.prepare(&sql)?;
     let mut rows = stmt.query(aref.as_slice())?;
-    let mut out = format!("{{\"total\":{total},\"pageNo\":{page_no},\"pageSize\":{page_size},\"rows\":[");
+    let mut out =
+        format!("{{\"total\":{total},\"pageNo\":{page_no},\"pageSize\":{page_size},\"rows\":[");
     let mut first = true;
     while let Some(row) = rows.next()? {
         if !first {
@@ -398,7 +442,10 @@ mod tests {
     fn delete_all_respects_the_active_filter() {
         let conn = seeded();
         // range-scoped delete removes only what the filter selects
-        assert_eq!(delete_records(&conn, "all=1&from=150&to=250").unwrap(), Some(1));
+        assert_eq!(
+            delete_records(&conn, "all=1&from=150&to=250").unwrap(),
+            Some(1)
+        );
         // all=1 with no filter empties the table
         assert_eq!(delete_records(&conn, "all=1").unwrap(), Some(2));
         let left: i64 = conn

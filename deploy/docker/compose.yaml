@@ -20,7 +20,7 @@ services:
     restart: unless-stopped
     stop_grace_period: 10s
     volumes:
-      # Mount the directory so future config-runtime.toml can be atomically
+      # Mount the directory so config-runtime.toml can be atomically
       # written alongside config.toml and survive container replacement.
       - type: bind
         source: ./config

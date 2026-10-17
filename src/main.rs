@@ -4,7 +4,6 @@ mod parse;
 mod store;
 mod web;
 
-use arc_swap::ArcSwap;
 use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
 use std::path::PathBuf;
@@ -21,14 +20,17 @@ fn main() {
         }
     };
 
-    let exclude = Arc::new(ArcSwap::from_pointee(cfg.normalized_exclude()));
+    let runtime = Arc::new(std::sync::Mutex::new(config::Runtime::load(
+        &cfg,
+        cfg_path.with_file_name("config-runtime.toml"),
+    )));
     eprintln!(
         "config loaded: interface={} db={} bind={} retention={}d exclude={} entries",
         cfg.interface,
         cfg.db_path,
         cfg.bind,
         cfg.retention_days,
-        exclude.load().len()
+        cfg.exclude.len()
     );
 
     // Writer owns the primary connection; open it before capture so schema
@@ -52,10 +54,11 @@ fn main() {
     }
 
     {
+        let runtime = runtime.clone();
         let bind = cfg.bind.clone();
         let db_path = cfg.db_path.clone();
         std::thread::spawn(move || {
-            if let Err(e) = web::run(&bind, &db_path) {
+            if let Err(e) = web::run(&bind, &db_path, runtime) {
                 eprintln!("fatal: {e}");
                 std::process::exit(1);
             }
@@ -63,32 +66,22 @@ fn main() {
     }
 
     {
-        let interface = cfg.interface.clone();
-        let exclude = exclude.clone();
-        std::thread::spawn(move || {
-            if let Err(e) = capture::run(&interface, exclude, tx) {
-                eprintln!("fatal: {e}");
-                std::process::exit(1); // systemd Restart=on-failure takes over
-            }
-        });
+        let runtime = runtime.clone();
+        std::thread::spawn(move || capture::supervise(runtime, tx));
     }
 
-    // Main thread handles signals. SIGHUP hot-swaps the exclude list;
-    // interface/bind/db_path changes require a restart.
+    // SIGHUP reloads capture settings, preserving runtime overrides.
     let mut signals = Signals::new([SIGHUP, SIGTERM, SIGINT]).expect("signal setup");
     for sig in signals.forever() {
         match sig {
             SIGHUP => match config::Config::load(&cfg_path) {
                 Ok(new_cfg) => {
-                    let list = new_cfg.normalized_exclude();
-                    eprintln!("SIGHUP: exclude list reloaded ({} entries)", list.len());
-                    if new_cfg.interface != cfg.interface
-                        || new_cfg.bind != cfg.bind
-                        || new_cfg.db_path != cfg.db_path
-                    {
-                        eprintln!("SIGHUP: interface/bind/db_path changed — restart required, ignoring");
-                    }
-                    exclude.store(Arc::new(list));
+                    let loaded = config::Runtime::load(
+                        &new_cfg,
+                        cfg_path.with_file_name("config-runtime.toml"),
+                    );
+                    runtime.lock().unwrap().settings = loaded.settings;
+                    eprintln!("SIGHUP: capture settings reloaded");
                 }
                 Err(e) => eprintln!("SIGHUP: reload failed, keeping old exclude list: {e}"),
             },

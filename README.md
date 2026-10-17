@@ -75,7 +75,7 @@ Edit `exclude` in `/etc/dns-leak-monitor/config.toml`, then reload it:
 sudo systemctl reload dns-leak-monitor
 ```
 
-Changing the interface, database path, or bind address requires a restart:
+Changing the database path or bind address requires a restart:
 
 ```bash
 sudo systemctl restart dns-leak-monitor
@@ -103,3 +103,29 @@ cargo build
 cargo test
 cargo clippy --all-targets -- -D warnings
 ```
+
+### Live capture settings
+
+Open **Capture settings** in the console to select an interface or edit excluded
+suffixes (one per line). Saving applies immediately and atomically writes
+`config-runtime.toml` beside the main config. These interface/exclude values take
+priority over `config.toml`, including after restart or SIGHUP. Delete the runtime
+file and reload to return to the main config defaults.
+
+An unavailable/down interface pauses capture without stopping the console.
+Retries back off from 5 seconds to a maximum of 60 seconds; changing the interface
+interrupts that wait. The console displays capture errors and recovery status.
+The monitor keeps the selected interface rather than silently choosing another.
+
+The service user needs write access to the configuration directory. The updated
+systemd installer and unit grant this; existing installations should rerun the
+installer to update directory ownership and the unit.
+
+### Releases
+
+Push a version tag such as `v0.2.0` (matching Cargo.toml) to publish the GHCR
+multi-platform image and a GitHub Release. Branch pushes and pull requests do
+not trigger publishing. Releases include Linux x86_64 and ARM64 binary archives
+and SHA256SUMS. Binaries built on Ubuntu 24.04 require glibc 2.39 or newer and
+libpcap (`libpcap0.8t64` on Ubuntu 24.04). Each archive includes example config
+and systemd templates; the installer script builds from a source checkout.

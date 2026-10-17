@@ -129,3 +129,7 @@ not trigger publishing. Releases include Linux x86_64 and ARM64 binary archives
 and SHA256SUMS. Binaries built on Ubuntu 24.04 require glibc 2.39 or newer and
 libpcap (`libpcap0.8t64` on Ubuntu 24.04). Each archive includes example config
 and systemd templates; the installer script builds from a source checkout.
+
+Docker images build in parallel on native x86_64 and ARM64 runners, with
+separate architecture caches. Version tags are published only after both builds
+succeed, by combining their immutable image digests into a multi-platform manifest.

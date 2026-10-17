@@ -1,8 +1,10 @@
 target/
 *.md
+!README.md
+!README.en.md
 
 # Local documentation (keep files on disk, outside version control).
-/docs/
+.doc/
 
 # Local runtime configuration; keep the distributable example tracked.
 config.toml

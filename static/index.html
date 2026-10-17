@@ -38,6 +38,7 @@
   }
   .wrap { max-width: 1120px; margin: 0 auto; }
   header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  header > div:nth-child(2) { flex:1; min-width:0; }
   header img { width: 34px; height: 34px; }
   h1 { font-size: 24px; font-weight: 700; letter-spacing: -.4px; margin: 0; }
   .sub { color: var(--dim); font-size: 13px; margin-top: 2px; }
@@ -103,6 +104,39 @@
        padding: 4px 8px; border-radius: 8px; }
   .x:hover { background: rgba(255,59,48,.12); }
   .empty { padding: 44px 16px; text-align: center; color: var(--dim); }
+  .header-actions { display:flex; align-items:center; gap:8px; margin-left:auto; }
+  .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:38px; height:38px;
+    border:1px solid var(--sep); border-radius:10px; background:var(--card); color:var(--text2); cursor:pointer; }
+  .icon-btn svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.7; }
+  .appearance { position:relative; }
+  .appearance summary { list-style:none; width:auto; padding:0 8px; gap:4px; }
+  .appearance summary::-webkit-details-marker { display:none; }
+  .appearance select { position:absolute; right:0; top:44px; z-index:5; min-width:140px; border-color:var(--sep); background:var(--card); box-shadow:var(--shadow); }
+  dialog { width:min(560px, calc(100% - 32px)); max-height:calc(100dvh - 40px); overflow:auto;
+    padding:24px; border:1px solid var(--sep); border-radius:var(--radius); background:var(--card); color:var(--text); box-shadow:var(--shadow); }
+  dialog::backdrop { background:rgba(0,0,0,.4); }
+  .dialog-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:20px; }
+  .dialog-heading h2 { font-size:20px; margin:0; }
+  dialog .field { margin-bottom:18px; }
+  dialog textarea { resize:vertical; min-height:130px; }
+  .dialog-footer { display:flex; justify-content:flex-end; align-items:center; gap:12px; margin-top:20px; }
+  .filter-panel { display:block; }
+  .time-fields { display:flex; gap:12px; flex-wrap:wrap; }
+  #presets { margin-top:8px; align-self:flex-start; }
+  #presets button { font-size:11px; padding:3px 9px; }
+  .search-row { display:flex; gap:12px; align-items:flex-end; margin-top:16px; flex-wrap:wrap; }
+  .search-row .field { flex:1; min-width:210px; }
+  .filter-actions { display:flex; gap:8px; margin-left:auto; }
+  .page-size { display:inline-flex; align-items:center; gap:8px; }
+  .table-scroll { overflow-x:auto; }
+  @media (max-width:600px) {
+    header { gap:8px; }
+    header img { width:24px; height:24px; }
+    h1 { font-size:18px; }
+    header .sub { display:none; }
+    .header-actions { gap:6px; }
+    .icon-btn { width:34px; height:34px; }
+  }
   .note { font-size: 13px; color: var(--dim); padding: 0 2px 4px; }
 </style>
 <script>
@@ -124,28 +158,36 @@
       <h1>DNS Leak Monitor</h1>
       <div class="sub">Every stored row is unaccepted egress — investigate or exclude.</div>
     </div>
-    <span class="spacer"></span>
-      <div class="seg" id="theme" role="group" aria-label="Appearance">
-        <button data-t="light" title="Always light">Light</button>
-        <button data-t="dark" title="Always dark">Dark</button>
-        <button data-t="auto" title="Follow the system appearance">Auto</button>
-      </div>
+    <div class="header-actions">
+      <details class="appearance" id="appearanceMenu">
+        <summary class="icon-btn" aria-label="Appearance" title="Appearance">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg>
+          <span aria-hidden="true">⌄</span>
+        </summary>
+        <select id="theme" size="3" aria-label="Appearance">
+          <option value="light">Light</option><option value="dark">Dark</option><option value="auto">Auto</option>
+        </select>
+      </details>
+      <button class="icon-btn" id="openSettings" title="Capture settings" aria-label="Capture settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 3-.6 2.3-2 .9-2.1-.6-2 3.4 1.6 1.7v2.6L2.3 15l2 3.4 2.1-.6 2 .9L9 21h4l.6-2.3 2-.9 2.1.6 2-3.4-1.6-1.7v-2.6L19.7 9l-2-3.4-2.1.6-2-.9L13 3Z"/><circle cx="11" cy="12" r="3"/></svg>
+      </button>
+    </div>
   </header>
 
-  <details class="card" style="padding:16px;margin-bottom:16px">
-    <summary style="cursor:pointer">Capture settings</summary>
-    <div class="panel">
-      <div class="field"><label for="interface">Interface</label><input id="interface" list="interfaces"><datalist id="interfaces"></datalist></div>
-      <div class="field" style="flex:1"><label for="exclude">Exclude domains (one per line)</label><textarea id="exclude" rows="4" style="min-width:240px"></textarea></div>
-      <button class="btn" id="saveSettings">Save settings</button>
-      <span id="saveStatus" role="status"></span>
+  <dialog id="settingsDialog" aria-labelledby="settingsTitle">
+    <div class="dialog-heading"><h2 id="settingsTitle">Capture settings</h2><button class="icon-btn" id="closeSettings" aria-label="Close settings">×</button></div>
+    <div class="field"><label for="interface">Interface</label><select id="interface"></select>
+      <div class="note" id="interfaceHint"></div>
     </div>
-    <div class="note">Excluded queries are discarded before storage. Changes apply immediately and persist in config-runtime.toml.</div>
-  </details>
+    <div class="field"><label for="exclude">Exclude domains (one per line)</label><textarea id="exclude" rows="5"></textarea></div>
+    <div class="note">Excluded queries are discarded before storage. Saved changes apply immediately.</div>
+    <div class="dialog-footer"><span id="saveStatus" role="status"></span><button class="btn" id="saveSettings">Save settings</button></div>
+  </dialog>
   <div class="note" id="captureStatus" role="status">Loading capture status…</div>
 
   <div class="card">
-    <div class="panel">
+    <div class="panel filter-panel">
+      <div class="time-fields">
       <div class="field">
         <label for="from">From</label>
         <input type="datetime-local" id="from">
@@ -153,6 +195,7 @@
       <div class="field">
         <label for="to">To</label>
         <input type="datetime-local" id="to">
+      </div>
       </div>
       <div class="field">
         <div class="seg" id="presets">
@@ -164,19 +207,10 @@
           <button data-h="0">All</button>
         </div>
       </div>
-      <div class="field">
-        <label for="q">Search name</label>
-        <input type="search" id="q" placeholder="substring of qname…">
+      <div class="search-row">
+        <div class="field"><label for="q">Search name</label><input type="search" id="q" placeholder="substring of qname…"></div>
+        <div class="filter-actions"><button class="btn" id="apply">Apply</button><button class="btn sec" id="reset">Reset</button></div>
       </div>
-      <div class="field">
-        <label for="pageSize">Page size</label>
-        <select id="pageSize">
-          <option>25</option><option selected>50</option><option>100</option>
-          <option>200</option><option>500</option><option>1000</option>
-        </select>
-      </div>
-      <button class="btn" id="apply">Apply</button>
-      <button class="btn sec" id="reset">Reset</button>
     </div>
 
     <div class="bar">
@@ -196,12 +230,12 @@
   </div>
 
   <div class="card">
-    <table>
+    <div class="table-scroll"><table>
       <thead><tr>
         <th>Local time</th><th>Source</th><th>Destination</th><th>Name</th><th>Type</th><th></th>
       </tr></thead>
       <tbody id="rows"></tbody>
-    </table>
+    </table></div>
     <div class="empty" id="empty" hidden>No queries match this filter.</div>
     <div class="bar">
       <span class="status" id="range">—</span>
@@ -211,6 +245,9 @@
       <label class="status">Page <input id="pageJump" type="number" min="1" value="1" aria-label="Jump to page" style="width:80px"> / <span id="pageInfo">1</span></label>
       <button class="btn sec" id="next">Next ›</button>
       <button class="btn sec" id="last">Last »</button>
+      <label class="status page-size" for="pageSize">Page size
+        <select id="pageSize"><option>25</option><option selected>50</option><option>100</option><option>200</option><option>500</option><option>1000</option></select>
+      </label>
     </div>
   </div>
   <div class="note">Tip: × deletes one row (or the whole collapsed group). Shift-click × deletes every row with that name.</div>
@@ -381,13 +418,18 @@ $('collapse').addEventListener('change', () => go(1));
 function setTheme(t) {
   document.documentElement.dataset.theme = t;
   try { localStorage.setItem('theme', t); } catch (e) { /* non-fatal */ }
-  for (const b of $('theme').children) {
-    b.setAttribute('aria-pressed', String(b.dataset.t === t));
-  }
+  $('theme').value = t;
 }
-$('theme').addEventListener('click', e => {
-  const b = e.target.closest('button');
-  if (b) setTheme(b.dataset.t);
+$('theme').addEventListener('change', () => {
+  setTheme($('theme').value);
+  $('appearanceMenu').open = false;
+});
+document.addEventListener('click', e => { if (!$('appearanceMenu').contains(e.target)) $('appearanceMenu').open = false; });
+$('openSettings').addEventListener('click', () => { $('settingsDialog').showModal(); loadSettings(); });
+$('closeSettings').addEventListener('click', () => $('settingsDialog').close());
+$('settingsDialog').addEventListener('click', e => {
+  const rect = $('settingsDialog').getBoundingClientRect();
+  if (e.target === $('settingsDialog') && (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom)) $('settingsDialog').close();
 });
 
 function setAuto() {
@@ -403,7 +445,20 @@ async function loadSettings() {
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
     $('captureStatus').textContent = data.status + (data.error ? ' — ' + data.error : '');
-    $('interfaces').replaceChildren(...data.interfaces.map(name => { const o = document.createElement('option'); o.value = name; return o; }));
+    const selected = settingsLoaded ? $('interface').value : data.interface;
+    const names = [...new Set([...data.interfaces, selected].filter(Boolean))];
+    const options = names.map(name => {
+      const o = document.createElement('option'); o.value = name;
+      o.textContent = name + (data.interfaces.includes(name) ? '' : ' (unavailable)');
+      return o;
+    });
+    if ($('interface').innerHTML !== options.map(o => o.outerHTML).join('')) {
+      $('interface').replaceChildren(...options);
+    }
+    $('interface').value = selected;
+    const physical = data.interfaces.filter(name => !/^(veth|lo$|any$|docker|br-|bluetooth|nflog|nfqueue|dbus)/.test(name));
+    $('interfaceHint').textContent = `${data.interfaces.length} capture interfaces available.` +
+      (!physical.length ? ' No host network interface detected. For Docker, check that network_mode: host is active on a Linux host.' : '');
     if (!settingsLoaded) {
       $('interface').value = data.interface;
       $('exclude').value = data.exclude.join('\n');

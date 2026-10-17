@@ -1,0 +1,7 @@
+# Host interface to monitor; change to your host's actual interface.
+interface = "eth0"
+db_path = "/var/lib/dns-leak-monitor/dns.db"
+# Host networking: this listens on the host loopback address directly.
+bind = "127.0.0.1:28107"
+retention_days = 90
+exclude = ["in-addr.arpa", "ip6.arpa"]

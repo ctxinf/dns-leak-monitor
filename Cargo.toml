@@ -1,0 +1,18 @@
+[package]
+name = "dns-leak-monitor"
+version = "0.1.0"
+edition = "2021"
+description = "Monitor outbound plaintext DNS queries on Linux to help detect DNS leaks."
+
+[dependencies]
+pcap = "2"
+rusqlite = { version = "0.31", features = ["bundled"] }
+tiny_http = "0.12"
+arc-swap = "1"
+signal-hook = "0.3"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
+[profile.release]
+lto = true
+strip = true

@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DNS Leak Monitor</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>
+  :root {
+    --blue: #0A84FF; --red: #FF3B30; --green: #34C759; --orange: #FF9F0A;
+    --bg: #F2F2F7; --card: #FFFFFF; --sep: rgba(60,60,67,.14);
+    --text: #1C1C1E; --text2: #3C3C43; --dim: rgba(60,60,67,.6);
+    --radius: 14px;
+    color-scheme: light;
+    --shadow: 0 1px 2px rgba(0,0,0,.05), 0 6px 20px rgba(0,0,0,.05);
+  }
+  /* Dark palette, applied either by explicit choice or — in auto mode — by the
+     OS. `data-theme` is set on <html> before first paint to avoid a flash. */
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #000; --card: #1C1C1E; --sep: rgba(84,84,88,.5);
+    --text: #FFF; --text2: #EBEBF5; --dim: rgba(235,235,245,.6);
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.4);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root[data-theme="auto"] {
+      color-scheme: dark;
+      --bg: #000; --card: #1C1C1E; --sep: rgba(84,84,88,.5);
+      --text: #FFF; --text2: #EBEBF5; --dim: rgba(235,235,245,.6);
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 20px 64px; background: var(--bg); color: var(--text);
+    font: 15px/1.47 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  header img { width: 34px; height: 34px; }
+  h1 { font-size: 24px; font-weight: 700; letter-spacing: -.4px; margin: 0; }
+  .sub { color: var(--dim); font-size: 13px; margin-top: 2px; }
+
+  .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 16px; }
+  .panel { padding: 16px; display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 12px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: .4px; }
+  input, select {
+    font: inherit; color: var(--text); background: var(--bg); border: 1px solid transparent;
+    border-radius: 9px; padding: 7px 10px; min-height: 34px; outline: none;
+  }
+  input:focus, select:focus { border-color: var(--blue); background: var(--card); }
+  input[type=search] { min-width: 210px; }
+
+  /* iOS segmented control for the range presets */
+  .seg { display: inline-flex; background: var(--bg); border-radius: 9px; padding: 2px; gap: 2px; }
+  .seg button {
+    font: inherit; font-size: 13px; border: 0; background: none; color: var(--text2);
+    padding: 5px 11px; border-radius: 7px; cursor: pointer; white-space: nowrap;
+  }
+  .seg button[aria-pressed=true] { background: var(--card); color: var(--text); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+
+  .btn {
+    font: inherit; font-weight: 590; font-size: 14px; border: 0; cursor: pointer;
+    border-radius: 980px; padding: 8px 16px; min-height: 34px; background: var(--blue); color: #fff;
+    transition: opacity .15s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn.sec { background: var(--bg); color: var(--blue); }
+  .btn.danger { background: var(--red); }
+  .btn.ghost { background: none; color: var(--blue); padding: 8px 10px; }
+  .btn:disabled { opacity: .35; cursor: default; }
+
+  /* iOS switch */
+  .sw { display: inline-flex; align-items: center; gap: 9px; cursor: pointer; user-select: none; font-size: 14px; }
+  .sw input { display: none; }
+  .sw .track { width: 51px; height: 31px; border-radius: 999px; background: rgba(120,120,128,.32); position: relative; transition: background .2s; flex: none; }
+  .sw .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,.25); transition: transform .2s; }
+  .sw input:checked + .track { background: var(--green); }
+  .sw input:checked + .track::after { transform: translateX(20px); }
+
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--sep); }
+  .spacer { flex: 1; }
+  .status { font-size: 13px; color: var(--dim); }
+
+  table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--sep); vertical-align: middle; }
+  th { font-size: 12px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: .4px;
+       position: sticky; top: 0; background: var(--card); z-index: 1; }
+  thead th:first-child { border-top-left-radius: var(--radius); }
+  thead th:last-child { border-top-right-radius: var(--radius); }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: rgba(120,120,128,.07); }
+  td.name { font-weight: 500; word-break: break-all; }
+  td.mono, td.time { font-variant-numeric: tabular-nums; color: var(--text2);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; font-size: 13px; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+          background: rgba(10,132,255,.14); color: var(--blue); }
+  .badge { display: inline-block; margin-left: 7px; font-size: 11px; font-weight: 700; padding: 2px 7px;
+           border-radius: 999px; background: rgba(255,159,10,.18); color: var(--orange); }
+  .x { border: 0; background: none; color: var(--red); cursor: pointer; font-size: 17px; line-height: 1;
+       padding: 4px 8px; border-radius: 8px; }
+  .x:hover { background: rgba(255,59,48,.12); }
+  .empty { padding: 44px 16px; text-align: center; color: var(--dim); }
+  .note { font-size: 13px; color: var(--dim); padding: 0 2px 4px; }
+</style>
+<script>
+  // Set the theme before first paint — a deferred script would let the default
+  // palette flash first. localStorage may throw in hardened browser configs.
+  try {
+    document.documentElement.dataset.theme =
+      localStorage.getItem('theme') || 'auto';
+  } catch (e) {
+    document.documentElement.dataset.theme = 'auto';
+  }
+</script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="/favicon.svg" alt="">
+    <div>
+      <h1>DNS Leak Monitor</h1>
+      <div class="sub">Every stored row is unaccepted egress — investigate or exclude.</div>
+    </div>
+  </header>
+
+  <div class="card">
+    <div class="panel">
+      <div class="field">
+        <label>Range</label>
+        <div class="seg" id="presets">
+          <button data-h="1">1h</button>
+          <button data-h="12">12h</button>
+          <button data-h="24" aria-pressed="true">24h</button>
+          <button data-h="168">7d</button>
+          <button data-h="720">30d</button>
+          <button data-h="0">All</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="from">From</label>
+        <input type="datetime-local" id="from">
+      </div>
+      <div class="field">
+        <label for="to">To</label>
+        <input type="datetime-local" id="to">
+      </div>
+      <div class="field">
+        <label for="q">Search name</label>
+        <input type="search" id="q" placeholder="substring of qname…">
+      </div>
+      <div class="field">
+        <label for="pageSize">Page size</label>
+        <select id="pageSize">
+          <option>25</option><option selected>50</option><option>100</option>
+          <option>200</option><option>500</option><option>1000</option>
+        </select>
+      </div>
+      <button class="btn" id="apply">Apply</button>
+      <button class="btn sec" id="reset">Reset</button>
+    </div>
+
+    <div class="bar">
+      <label class="sw" title="Group repeated queries of the same name from the same source">
+        <input type="checkbox" id="collapse"><span class="track"></span>
+        <span>Collapse duplicates</span>
+      </label>
+      <label class="sw" title="Reload every 5 seconds">
+        <input type="checkbox" id="auto" checked><span class="track"></span>
+        <span>Auto-refresh</span>
+      </label>
+      <span class="spacer"></span>
+      <span class="status" id="status">—</span>
+      <div class="seg" id="theme" role="group" aria-label="Appearance">
+        <button data-t="light" title="Always light">Light</button>
+        <button data-t="dark" title="Always dark">Dark</button>
+        <button data-t="auto" title="Follow the system appearance">Auto</button>
+      </div>
+      <button class="btn ghost" id="refresh">Refresh</button>
+      <button class="btn danger" id="delAll">Delete all matching</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead><tr>
+        <th>Local time</th><th>Source</th><th>Destination</th><th>Name</th><th>Type</th><th></th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="empty" hidden>No queries match this filter.</div>
+    <div class="bar">
+      <span class="status" id="range">—</span>
+      <span class="spacer"></span>
+      <button class="btn sec" id="first">« First</button>
+      <button class="btn sec" id="prev">‹ Prev</button>
+      <span class="status" id="pageInfo">–</span>
+      <button class="btn sec" id="next">Next ›</button>
+      <button class="btn sec" id="last">Last »</button>
+    </div>
+  </div>
+  <div class="note">Tip: × deletes one row (or the whole collapsed group). Shift-click × deletes every row with that name.</div>
+</div>
+
+<script>
+const QTYPES = {1:'A',2:'NS',5:'CNAME',6:'SOA',12:'PTR',15:'MX',16:'TXT',28:'AAAA',33:'SRV',65:'HTTPS',255:'ANY'};
+const $ = id => document.getElementById(id);
+let pageNo = 1, total = 0, timer = null;
+
+// <input type="datetime-local"> speaks local wall time with no zone; convert
+// through the Date constructor so the epoch we send matches what the user sees.
+const toEpoch = v => v ? Math.floor(new Date(v).getTime() / 1000) : null;
+const toLocalInput = epoch => {
+  const d = new Date(epoch * 1000 - new Date().getTimezoneOffset() * 60000);
+  return d.toISOString().slice(0, 16);
+};
+
+function setPreset(hours) {
+  for (const b of $('presets').children) {
+    b.setAttribute('aria-pressed', String(Number(b.dataset.h) === hours));
+  }
+  if (hours === 0) { $('from').value = ''; $('to').value = ''; return; }
+  const now = Math.floor(Date.now() / 1000);
+  $('from').value = toLocalInput(now - hours * 3600);
+  $('to').value = '';   // open-ended so rows arriving mid-session still show
+}
+
+// Editing the explicit fields means the preset no longer describes the range.
+function clearPreset() {
+  for (const b of $('presets').children) b.setAttribute('aria-pressed', 'false');
+}
+
+function filterQuery() {
+  const p = new URLSearchParams();
+  const from = toEpoch($('from').value), to = toEpoch($('to').value);
+  if (from) p.set('from', from);
+  if (to) p.set('to', to);
+  const q = $('q').value.trim();
+  if (q) p.set('q', q);
+  if ($('collapse').checked) p.set('collapse', '1');
+  return p;
+}
+
+async function refresh() {
+  const p = filterQuery();
+  p.set('pageSize', $('pageSize').value);
+  p.set('pageNo', pageNo);
+  try {
+    const res = await fetch('/api/records?' + p);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    total = data.total;
+    render(data.rows);
+    const pages = Math.max(1, Math.ceil(total / data.pageSize));
+    // A delete can shrink the result set out from under the current page.
+    if (pageNo > pages) { pageNo = pages; return refresh(); }
+    const start = total ? (pageNo - 1) * data.pageSize + 1 : 0;
+    $('range').textContent = `${start}–${Math.min(pageNo * data.pageSize, total)} of ${total}`;
+    $('pageInfo').textContent = `Page ${pageNo} / ${pages}`;
+    $('first').disabled = $('prev').disabled = pageNo <= 1;
+    $('next').disabled = $('last').disabled = pageNo >= pages;
+    $('last').dataset.p = pages;
+    $('status').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    $('status').textContent = 'Fetch failed: ' + e.message;
+  }
+}
+
+function render(recs) {
+  $('empty').hidden = recs.length > 0;
+  $('rows').replaceChildren(...recs.map(r => {
+    const tr = document.createElement('tr');
+    const cells = [
+      ['time', new Date(r.ts * 1000).toLocaleString()],
+      ['mono', r.src],
+      ['mono', r.dst],
+      ['name', r.name],
+      ['type', QTYPES[r.qtype] || r.qtype],
+    ];
+    cells.forEach(([cls, v], i) => {
+      const td = document.createElement('td');
+      td.className = cls === 'type' ? '' : cls;
+      if (cls === 'type') {
+        const s = document.createElement('span');
+        s.className = 'pill';
+        s.textContent = v;
+        td.appendChild(s);
+      } else {
+        td.textContent = v;
+      }
+      // A collapsed group shows how many rows it stands for, and since when.
+      if (i === 3 && r.count > 1) {
+        const b = document.createElement('span');
+        b.className = 'badge';
+        b.textContent = '×' + r.count;
+        b.title = 'since ' + new Date(r.firstTs * 1000).toLocaleString();
+        td.appendChild(b);
+      }
+      tr.appendChild(td);
+    });
+    const td = document.createElement('td');
+    const btn = document.createElement('button');
+    btn.className = 'x';
+    btn.textContent = '×';
+    btn.title = r.count > 1
+      ? `delete these ${r.count} rows (shift-click: all rows with this name)`
+      : 'delete this row (shift-click: all rows with this name)';
+    btn.addEventListener('click', async ev => {
+      const q = ev.shiftKey
+        ? 'name=' + encodeURIComponent(r.name)
+        : 'id=' + encodeURIComponent(r.ids);
+      await fetch('/api/records?' + q, { method: 'DELETE' });
+      refresh();
+    });
+    td.appendChild(btn);
+    tr.appendChild(td);
+    return tr;
+  }));
+}
+
+$('delAll').addEventListener('click', async () => {
+  const p = filterQuery();
+  p.delete('collapse');           // collapse is a view mode, not a filter
+  p.set('all', '1');
+  const scoped = [...p.keys()].some(k => k !== 'all');
+  const what = scoped ? `all ${total} rows matching the current filter` : 'EVERY stored row';
+  if (!confirm(`Delete ${what}? This cannot be undone.`)) return;
+  const res = await fetch('/api/records?' + p, { method: 'DELETE' });
+  $('status').textContent = res.ok
+    ? `Deleted ${(await res.json()).deleted} rows`
+    : 'Delete failed: ' + await res.text();
+  pageNo = 1;
+  refresh();
+});
+
+function go(n) { pageNo = n; refresh(); }
+$('first').addEventListener('click', () => go(1));
+$('prev').addEventListener('click', () => go(Math.max(1, pageNo - 1)));
+$('next').addEventListener('click', () => go(pageNo + 1));
+$('last').addEventListener('click', () => go(Number($('last').dataset.p) || 1));
+
+$('presets').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  setPreset(Number(b.dataset.h));
+  go(1);
+});
+$('apply').addEventListener('click', () => go(1));
+$('reset').addEventListener('click', () => {
+  $('q').value = '';
+  $('pageSize').value = '50';
+  $('collapse').checked = false;
+  setPreset(24);
+  go(1);
+});
+$('refresh').addEventListener('click', refresh);
+for (const id of ['from', 'to']) $(id).addEventListener('change', () => { clearPreset(); go(1); });
+$('q').addEventListener('change', () => go(1));
+$('q').addEventListener('keydown', e => { if (e.key === 'Enter') go(1); });
+$('pageSize').addEventListener('change', () => go(1));
+$('collapse').addEventListener('change', () => go(1));
+
+function setTheme(t) {
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem('theme', t); } catch (e) { /* non-fatal */ }
+  for (const b of $('theme').children) {
+    b.setAttribute('aria-pressed', String(b.dataset.t === t));
+  }
+}
+$('theme').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (b) setTheme(b.dataset.t);
+});
+
+function setAuto() {
+  clearInterval(timer);
+  if ($('auto').checked) timer = setInterval(refresh, 5000);
+}
+$('auto').addEventListener('change', setAuto);
+
+setTheme(document.documentElement.dataset.theme || 'auto');
+setPreset(24);
+setAuto();
+refresh();
+</script>
+</body>
+</html>

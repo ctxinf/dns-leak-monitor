@@ -1,0 +1,34 @@
+target/
+*.md
+
+# Local documentation (keep files on disk, outside version control).
+/docs/
+
+# Local runtime configuration; keep the distributable example tracked.
+config.toml
+config.local.toml
+config-runtime.toml
+!deploy/docker/config/config.toml
+.env
+.env.*
+!.env.example
+
+# Captured DNS data, SQLite sidecars, and logs.
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.log
+*.log.*
+*.pcap
+*.pcapng
+*.cap
+
+# Local credentials.
+*.pem
+*.key
+id_rsa
+id_ed25519
+/.aws/

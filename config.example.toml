@@ -1,0 +1,13 @@
+# /etc/dns-leak-monitor/config.toml
+interface      = "eth0"              # REQUIRED — service exits if unset
+db_path        = "/var/lib/dns-leak-monitor/dns.db"
+bind           = "127.0.0.1:28107"    # localhost only; reach via SSH tunnel
+retention_days = 90
+
+# Outbound queries whose qname matches ANY entry are dropped, never stored.
+# Match = case-insensitive suffix: "example.com" also matches "a.example.com".
+# Over-exclusion is permanent — dropped queries cannot be reviewed later.
+exclude = [
+  "example.com",
+  "in-addr.arpa",   # reverse-PTR noise
+]

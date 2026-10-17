@@ -1,0 +1,39 @@
+# Linux Docker Engine with rootful host networking is required to capture
+# host interfaces. Run from this directory: docker compose up -d --build
+# To use GHCR: IMAGE=ghcr.io/owner/repository:latest docker compose up -d --no-build
+services:
+  dns-leak-monitor:
+    image: ${IMAGE:-dns-leak-monitor:local}
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    network_mode: host
+    user: "0:0"
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    restart: unless-stopped
+    stop_grace_period: 10s
+    volumes:
+      # Mount the directory so future config-runtime.toml can be atomically
+      # written alongside config.toml and survive container replacement.
+      - type: bind
+        source: ./config
+        target: /etc/dns-leak-monitor
+        bind:
+          create_host_path: false
+          selinux: Z
+      - data:/var/lib/dns-leak-monitor
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  data:

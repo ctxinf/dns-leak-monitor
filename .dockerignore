@@ -1,0 +1,11 @@
+**
+!Cargo.toml
+!Cargo.lock
+!build.rs
+!src/
+!src/**
+!static/
+!static/**
+!deploy/
+!deploy/docker/
+!deploy/docker/Dockerfile

@@ -31,9 +31,10 @@
   - [2.1 Docker Compose（推荐）](#21-docker-compose推荐)
   - [2.2 systemd 服务](#22-systemd-服务)
   - [2.3 从源码构建](#23-从源码构建)
-- [3. 使用建议](#3-使用建议)
-- [4. 项目结构](#4-项目结构)
-- [5. 开发](#5-开发)
+- [3. 自定义配置](#3-自定义配置)
+- [4. 使用建议](#4-使用建议)
+- [5. 项目结构](#5-项目结构)
+- [6. 开发](#6-开发)
 
 ## 1. 它解决什么问题
 
@@ -89,8 +90,6 @@ volumes:
 docker compose up -d
 ```
 
-如果需要修改配置，请在 `compose.yml` 同目录创建 `config/config.toml`，并取消上方配置目录挂载的注释，其中的 `interface` 改成主机上实际要监听的网卡。配置目录会挂载到容器内，因此控制台保存的网卡和排除名单可以在容器重建后保留。
-
 查看日志或停止服务：
 
 ```bash
@@ -136,7 +135,37 @@ cargo build --release --locked
 
 需要 Rust stable 和 libpcap 开发包。生成的二进制位于 `target/release/dns-leak-monitor`。可以参考 [`config.example.toml`](config.example.toml)、[`deploy/systemd/dns-leak-monitor.service`](deploy/systemd/dns-leak-monitor.service) 和安装脚本完成手动部署。
 
-## 3. 使用建议
+## 3. 自定义配置
+
+配置文件放置位置：
+
+- Docker Compose：`compose.yml` 同目录下的 `config/config.toml`，挂载到容器内的 `/etc/dns-leak-monitor/config.toml`。需要先取消 Compose 文件中 `- ./config:/etc/dns-leak-monitor:Z` 的注释。
+- systemd：`/etc/dns-leak-monitor/config.toml`。
+- 从源码运行：通过 `--config` 指定配置文件路径。
+
+Docker 下，启用挂载后先执行 `docker compose up -d`，让容器自动创建配置目录和文件，再编辑 `config/config.toml`。不要提前用 `mkdir` 创建目录，否则可能产生权限问题。挂载整个配置目录可以让控制台保存的配置在容器重建后保留。
+
+```toml
+# 必填：要监听的主机网卡，改成实际承载出站 DNS 流量的网卡。
+interface = "eth0"
+
+# SQLite 数据库路径，指容器内或 systemd 所在主机上的路径。
+db_path = "/var/lib/dns-leak-monitor/dns.db"
+
+# Web 控制台监听地址；Docker 使用 host network，直接监听主机回环地址。
+bind = "127.0.0.1:28107"
+
+# 记录保留天数，至少为 1。
+retention_days = 90
+
+# 排除的域名后缀，不区分大小写；example.com 也会匹配 a.example.com。
+# 匹配的查询不会入库。以下默认值用于排除反向 DNS 查询。
+exclude = ["in-addr.arpa", "ip6.arpa"]
+```
+
+修改后，Docker 执行 `docker compose restart`，systemd 执行 `sudo systemctl restart dns-leak-monitor`。控制台保存的网卡和排除名单位于同目录的 `config-runtime.toml`，会优先于 `config.toml` 中的对应配置。
+
+## 4. 使用建议
 
 1. 先确认本机的 DNS 服务确实承担主要入口，并通过 DoH 访问上游。
 2. 可以把已经确认正常的高频域名或反向解析域名加入 `exclude`，例如 `in-addr.arpa` 和 `ip6.arpa`。
@@ -145,14 +174,14 @@ cargo build --release --locked
 
 排除名单匹配域名后缀。例如 `example.com` 也会排除 `a.example.com`。记录默认保留 90 天，数据库和日志可能包含主机名及地址，请按你的环境进行访问控制和备份管理。
 
-## 4. 项目结构
+## 5. 项目结构
 
 - `src/`：抓包、DNS 解析、排除、SQLite 存储和 Web 控制台。
 - `deploy/systemd/`：systemd 单元和安装脚本。
 - `deploy/docker/`：Dockerfile、Compose 文件和容器默认配置。
 - `config.example.toml`：主机部署的配置示例。
 
-## 5. 开发
+## 6. 开发
 
 ```bash
 cargo build

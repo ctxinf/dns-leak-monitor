@@ -27,9 +27,10 @@
   - [2.1 Docker Compose (recommended)](#21-docker-compose-recommended)
   - [2.2 systemd service](#22-systemd-service)
   - [2.3 Build from source](#23-build-from-source)
-- [3. Recommended workflow](#3-recommended-workflow)
-- [4. Repository layout](#4-repository-layout)
-- [5. Development](#5-development)
+- [3. Custom configuration](#3-custom-configuration)
+- [4. Recommended workflow](#4-recommended-workflow)
+- [5. Repository layout](#5-repository-layout)
+- [6. Development](#6-development)
 
 ## 1. The problem it solves
 
@@ -85,8 +86,6 @@ Start the service:
 docker compose up -d
 ```
 
-If you need to change the configuration, create `config/config.toml` alongside `compose.yml` and uncomment the configuration-directory mount above. Set `interface` to the host interface that carries the DNS traffic. The configuration directory is bind-mounted into the container, so interface and exclusion changes made by the console survive container recreation.
-
 View logs or stop the service:
 
 ```bash
@@ -133,7 +132,37 @@ cargo build --release --locked
 
 You need stable Rust and the libpcap development package. The binary is written to `target/release/dns-leak-monitor`. For a manual deployment, use [`config.example.toml`](config.example.toml), [`deploy/systemd/dns-leak-monitor.service`](deploy/systemd/dns-leak-monitor.service), and the installer script as references.
 
-## 3. Recommended workflow
+## 3. Custom configuration
+
+Configuration file locations:
+
+- Docker Compose: `config/config.toml` alongside `compose.yml`, mounted at `/etc/dns-leak-monitor/config.toml` in the container. Uncomment `- ./config:/etc/dns-leak-monitor:Z` in the Compose file to enable the mount.
+- systemd: `/etc/dns-leak-monitor/config.toml`.
+- Running from source: the file passed with `--config`.
+
+For Docker, enable the mount and run `docker compose up -d` first so the container automatically creates the configuration directory and file, then edit `config/config.toml`. Do not create the directory with `mkdir` beforehand, as this can cause permission issues. Mount the entire directory so changes saved by the console survive container recreation.
+
+```toml
+# Required: host network interface to monitor; replace with your actual interface.
+interface = "eth0"
+
+# SQLite database path inside the container or on the systemd host.
+db_path = "/var/lib/dns-leak-monitor/dns.db"
+
+# Web console address; host networking binds directly to the host loopback.
+bind = "127.0.0.1:28107"
+
+# Number of days to retain records; must be at least 1.
+retention_days = 90
+
+# Excluded domain suffixes (case-insensitive); example.com also matches a.example.com.
+# Matching queries are never stored. These defaults exclude reverse-DNS queries.
+exclude = ["in-addr.arpa", "ip6.arpa"]
+```
+
+Restart after editing: `docker compose restart` for Docker or `sudo systemctl restart dns-leak-monitor` for systemd. Interface and exclusion settings saved by the console are stored in `config-runtime.toml` in the same directory and take precedence over the corresponding settings in `config.toml`.
+
+## 4. Recommended workflow
 
 1. Confirm that your local DNS service handles the main DNS entry point and uses DoH upstream.
 2. You can add confirmed-good, high-volume names or reverse-DNS domains to `exclude`, such as `in-addr.arpa` and `ip6.arpa`.
@@ -142,14 +171,14 @@ You need stable Rust and the libpcap development package. The binary is written 
 
 Exclusions use DNS suffix matching: `example.com` also excludes `a.example.com`. Records are retained for 90 days by default. The database and logs may contain hostnames and addresses, so apply access controls and backup rules appropriate for your environment.
 
-## 4. Repository layout
+## 5. Repository layout
 
 - `src/`: capture, DNS parsing, exclusion, SQLite storage, and web console.
 - `deploy/systemd/`: systemd unit and installer.
 - `deploy/docker/`: Dockerfile, Compose file, and container defaults.
 - `config.example.toml`: host deployment configuration example.
 
-## 5. Development
+## 6. Development
 
 ```bash
 cargo build
